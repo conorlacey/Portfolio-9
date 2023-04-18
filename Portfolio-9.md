@@ -117,7 +117,7 @@ pages and personally this is fine by me if I wait about 30 minutes. I’ll
 just answer some emails while this runs.
 
 ``` one
-umbers1 <- seq(from = 1, to = 10, by = 1)
+numbers1 <- seq(from = 1, to = 10, by = 1)
 numbers2 <- seq(from = 11, to = 20, by = 1)
 numbers3 <- seq(from = 21, to = 30, by = 1)
 numbers4 <- seq(from = 31, to = 40, by = 1)
