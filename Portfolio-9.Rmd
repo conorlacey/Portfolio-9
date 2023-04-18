@@ -1,0 +1,149 @@
+---
+title: "Portfolio-9"
+author: "Conor Lacey"
+date: "2023-04-18"
+output: github_document
+---
+
+```{r library}
+suppressWarnings(library(tidyverse))
+suppressWarnings(suppressMessages(library(rvest)))
+suppressWarnings(library(stringi))
+suppressWarnings(library(glue))
+suppressWarnings(library(robotstxt))
+```
+
+### Introduction
+
+Ok so I need to buy a new car so I'm going to scrape some data from carvana! Specifically I'm looking for a subaru so I will get the link to that specific search space from the website. https://www.carvana.com/cars/subaru?email-capture=&page=1
+
+### Make Urls
+
+First I need to write a function to scrape one page.
+
+```{r function}
+url <- "https://www.carvana.com/cars/subaru?email-capture=&page=1"
+
+scrape_page <- function(url) {
+
+page <- read_html(url)
+
+#Title and year
+cars <- page %>% 
+  html_nodes(".year-make") %>% 
+  html_text()
+
+year <- substring(cars,1,4) %>% as.numeric()
+
+car <- substring(cars, 6, nchar(cars))
+
+#Monthly 
+page %>% 
+  html_nodes(".middle-frame") %>% 
+  html_text()
+
+#Cost 
+cost <- page %>% 
+  html_nodes(".text-2xl") %>% 
+  html_text()
+
+#Miles 
+miles <- page %>% 
+  html_nodes(".trim-mileage") %>% 
+  html_text()
+
+data.frame(car = car, year = year, cost = cost, miles = miles)
+}
+
+head(scrape_page(url))
+```
+
+### Scrape Multiple URLS
+
+Ok now we have a function that will scrape a page. However, now let's scrape all 46.
+
+```{46 page scrape}
+root <- "https://www.carvana.com/cars/subaru?email-capture=&page="
+numbers <- seq(from = 1, to = 46, by = 1)
+urls <- glue("{root}{numbers}")
+
+cars.df <- map_dfr(urls,scrape_page) #This will bind the data from each page
+```
+
+Uh oh? Houston we have a problem. If you look up this error "HTTP error 429", you will find we are having issues with being rate limited. Rate limiting is preventing our bot from operating as it is exceeding some constraint. The constraint is network traffic or in other words we are going through too many pages at a time on Carvana's website.
+
+### Scrape One At a Time
+
+There a few ways to solve this and perhaps the most efficient way would be to make an API request of their car inventory. However, they unfortunately do not make this available so we will go with the waiting around approach. What i mean by this is we can simply just pause the programming until the rate limit resets. I suspect this one takes about 15 minutes and I also suspect it'll begin to rate limit after scrapping about 20 pages. 
+
+Therefore, we shall write a program that scrapes 20 pages at a time and will pause for 15 minutes after scraping 20 pages to allow for the rate limit to reset. This may seem inefficient, but we are only wanting 46 pages and personally this is fine by me if I wait about 30 minutes. I'll just answer some emails while this runs.
+
+
+```{One at a time}
+umbers1 <- seq(from = 1, to = 10, by = 1)
+numbers2 <- seq(from = 11, to = 20, by = 1)
+numbers3 <- seq(from = 21, to = 30, by = 1)
+numbers4 <- seq(from = 31, to = 40, by = 1)
+numbers5 <- seq(from = 41, to = 46, by = 1)
+
+urls1 <- glue("{root}{numbers1}")
+urls2 <- glue("{root}{numbers2}")
+urls3 <- glue("{root}{numbers3}")
+urls4 <- glue("{root}{numbers4}")
+urls5 <- glue("{root}{numbers5}")
+
+cars.df.1 <- map_dfr(urls1,scrape_page)
+cars.df.2 <- map_dfr(urls2,scrape_page)
+Sys.sleep(15*60) #This will pause the programming for 15 minutes
+cars.df.3<- map_dfr(urls3,scrape_page)
+cars.df.4 <- map_dfr(urls4,scrape_page)
+Sys.sleep(15*60) #This will pause the programming for 15 minutes
+cars.df.5 <- map_dfr(urls5,scrape_page)
+
+#Bind the data 
+cars.df <- bind_rows(cars.df.1, 
+                     cars.df.2,
+                     cars.df.3,
+                     cars.df.4,
+                     cars.df.5)
+#Save the data file
+write_rds(cars.df, "cars.RDS")
+```
+
+### Final Edits
+
+Ok now we have a our data. However, the data frame still needs some editing. Specifically the miles column. 
+
+```{r read from .RDS}
+cars.df <- read_rds("cars.RDS")
+head(cars.df)
+```
+
+I don't want the entire string, I just want to extract the actual miles on the vehicle. To do this we will include all characters beyond "•". 
+
+```{r delete until "•"}
+cars.df$miles <- cars.df$miles %>% 
+  str_sub(str_locate(cars.df$miles, "•")[,1]+2)
+
+head(cars.df)
+```
+
+Perfect now let's get rid of all the characters I do not want and make this column numeric.
+
+We shall do the same thing for column cost.
+
+```{r last bits of edits}
+cars.df$miles <- cars.df$miles %>% 
+  str_replace(",", "") %>% 
+  str_replace(" miles", "") %>% 
+  as.numeric()
+
+cars.df$cost <- cars.df$cost %>% 
+  str_sub(2,) %>% 
+  str_replace(",", "") %>% 
+  as.numeric()
+
+head(cars.df)
+```
+
+Perfect! Now I have my subaru data set!
